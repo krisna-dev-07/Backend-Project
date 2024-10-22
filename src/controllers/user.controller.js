@@ -274,6 +274,63 @@ const updateUserCreadentials = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, user, "creadentials Update successful"))
 })
 
+const updateAvatar= asyncHandler(async(req,res)=>{
+   const avatarLocal = req.file?._id
+
+   if(!avatarLocal){
+    throw new ApiError(400,"Avatar file Missing")
+   }
+
+    const avatar=uploadOnCloudinary(avatarLocal)
+
+    if(!avatar.url){
+        throw new ApiError(401,"Error while uploading on Avatar")
+    }
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,{
+            $set:{
+                avatar:avatar.url
+            }
+        },
+        {
+            new:true
+        }
+   )
+   return res
+   .status(200)
+   .json(new ApiResponse(200,user,"avatar updated successsfully"))
+
+})
+const updateCoverImage= asyncHandler(async(req,res)=>{
+   const coverImageLocal = req.file?._id
+
+   if(!coverImageLocal){
+    throw new ApiError(400,"cover Image file Missing")
+   }
+
+    const coverImage=uploadOnCloudinary(avatarLocal)
+
+    if(!coverImage.url){
+        throw new ApiError(401,"Error while uploading on coverImage")
+    }
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,{
+            $set:{
+                coverImage:coverImage.url
+            }
+        },
+        {
+            new:true
+        }
+   )
+
+   return res
+   .status(200)
+   .json(
+    new ApiResponse(200,user,"coverImage updated successsfully")
+   )
+})
+
 export {
     registerUser,
     loginUser,
@@ -281,5 +338,7 @@ export {
     refreshAccessToken,
     changePassword,
     getCurrentUser,
-    updateUserCreadentials
+    updateUserCreadentials,
+    updateAvatar,
+    updateCoverImage
 }
