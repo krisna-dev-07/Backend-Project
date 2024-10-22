@@ -8,8 +8,8 @@ import { ApiResponse } from "../utils/ApiResponse.js"
 const generateAccessAndRefereshTokens = async(userId) =>{
     try {
         const user = await User.findById(userId)
-        const accessToken = user.generateaccesstoken()
-        const refreshToken = user.generaterefreshtoken()
+        const accessToken = await user.generateaccesstoken()
+        const refreshToken = await user.generaterefreshtoken()
 
         user.refreshToken = refreshToken
         await user.save({ validateBeforeSave: false })
@@ -154,29 +154,28 @@ const loginUser = asyncHandler(async (req, res) => {
 })
 
 
-const logOutUser = asyncHandler(async (req, res) => {
+const logoutUser = asyncHandler(async(req, res) => {
     await User.findByIdAndUpdate(
         req.user._id,
         {
-            $set: {
-                refreshToken: undefined
+            $unset: {
+                refreshToken: 1 // this removes the field from document
             }
         },
         {
             new: true
         }
-
-
     )
+
     const options = {
         httpOnly: true,
         secure: true
     }
 
     return res
-        .status(200)
-        .clearCookie("accessToken", options)
-        .clearCookie("refreshToken", options)
-        .json(new ApiResponse(200, {}, "User Logged Out successfully"))
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "User logged Out"))
 })
-export { registerUser, loginUser, logOutUser }
+export { registerUser, loginUser, logoutUser }
