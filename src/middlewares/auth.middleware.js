@@ -6,7 +6,9 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
     // console.log("Headers:", req.headers); // Log all headers
     // console.log("Cookies:", req.cookies); // Log all cookies
 
+    // req has access to cookies due to cookie-parser
     const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
+    // replace bearer cuz it's suffix to access token from Authorization header
     console.log("Retrieved token:", token); // Log the retrieved token
 
     if (!token || typeof token !== 'string') {
@@ -15,6 +17,7 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
 
     try {
         const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+        // checking the access token
         const user = await User.findById(decodedToken?._id).select("-password -refreshToken");
 
         if (!user) {

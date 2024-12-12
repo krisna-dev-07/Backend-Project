@@ -40,6 +40,7 @@ const registerUser = asyncHandler(async (req, res) => {
     // get user details validation
     const { fullName, email, username, password } = req.body
     console.log("email:", email);
+    console.log("username:", username);
 
     if (
         [fullName, email, password, username].some((fields) => fields?.trim() === "")
@@ -54,9 +55,20 @@ const registerUser = asyncHandler(async (req, res) => {
     if (existedUser) {
         throw new ApiError(409, "User with email or username already existed")
     }
+    console.log(req.files);
 
     //get the localpath of images
-    const avatarlocalPath = req.files?.avatar[0]?.path;
+    // const avatarlocalPath = req.files?.avatar[0]?.path;
+    //  avatar has a fisrt object i.e avatar[0]
+
+    //   to avoid cannot read undefined error
+    let avatarlocalPath
+    if (req.files && Array.isArray(req.files.avatar) && req.files.avatar.length > 0) {
+        avatarlocalPath = req.files.coverImage[0].path
+    }
+    console.log("path", avatarlocalPath);
+
+
     let coverImagelocalPath
     if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
         coverImagelocalPath = req.files.coverImage[0].path
@@ -157,6 +169,12 @@ const loginUser = asyncHandler(async (req, res) => {
 
 
 const logoutUser = asyncHandler(async (req, res) => {
+
+    /*      since we can't give a form to user to give details and
+            we want access to user to create a middleware auth to 
+            authenticate login and add user to req.body
+    */
+
     await User.findByIdAndUpdate(
         req.user._id,
         {
@@ -274,61 +292,149 @@ const updateUserCreadentials = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, user, "creadentials Update successful"))
 })
 
-const updateAvatar= asyncHandler(async(req,res)=>{
-   const avatarLocal = req.file?._id
+const updateAvatar = asyncHandler(async (req, res) => {
+    const avatarLocal = req.file?._id
 
-   if(!avatarLocal){
-    throw new ApiError(400,"Avatar file Missing")
-   }
+    if (!avatarLocal) {
+        throw new ApiError(400, "Avatar file Missing")
+    }
 
-    const avatar=uploadOnCloudinary(avatarLocal)
+    const avatar = uploadOnCloudinary(avatarLocal)
 
-    if(!avatar.url){
-        throw new ApiError(401,"Error while uploading on Avatar")
+    if (!avatar.url) {
+        throw new ApiError(401, "Error while uploading on Avatar")
     }
     const user = await User.findByIdAndUpdate(
-        req.user?._id,{
-            $set:{
-                avatar:avatar.url
-            }
-        },
-        {
-            new:true
+        req.user?._id, {
+        $set: {
+            avatar: avatar.url
         }
-   )
-   return res
-   .status(200)
-   .json(new ApiResponse(200,user,"avatar updated successsfully"))
+    },
+        {
+            new: true
+        }
+    )
+    return res
+        .status(200)
+        .json(new ApiResponse(200, user, "avatar updated successsfully"))
 
 })
-const updateCoverImage= asyncHandler(async(req,res)=>{
-   const coverImageLocal = req.file?._id
+const updateCoverImage = asyncHandler(async (req, res) => {
+    const coverImageLocal = req.file?._id
 
-   if(!coverImageLocal){
-    throw new ApiError(400,"cover Image file Missing")
-   }
+    if (!coverImageLocal) {
+        throw new ApiError(400, "cover Image file Missing")
+    }
 
-    const coverImage=uploadOnCloudinary(avatarLocal)
+    const coverImage = uploadOnCloudinary(avatarLocal)
 
-    if(!coverImage.url){
-        throw new ApiError(401,"Error while uploading on coverImage")
+    if (!coverImage.url) {
+        throw new ApiError(401, "Error while uploading on coverImage")
     }
     const user = await User.findByIdAndUpdate(
-        req.user?._id,{
-            $set:{
-                coverImage:coverImage.url
+        req.user?._id, {
+        $set: {
+            coverImage: coverImage.url
+        }
+    },
+        {
+            new: true
+        }
+    )
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, user, "coverImage updated successsfully")
+        )
+})
+
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+    const { username } = req.params // taking data from url
+
+    if (!username) {
+        throw new ApiError(401, "Username not found")
+
+    }
+
+    const channel = User.aggregate([
+        {
+            // match finds the documents required
+
+            $match: {
+                username: username?.toLowerCase()
+            }
+        },
+        // now we are in the username model
+
+        // lookup is for finding fields and joining the models
+
+        //  this lookup is for finding usernames subscriber from subscription model 
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers"
+
+            }
+        },
+        //  this lookup is for finding to whom username is subscribed to from subscription model 
+
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribedTo"
             }
         },
         {
-            new:true
-        }
-   )
+            // addfields add the new fields to the existing object
+            $addFields: {
+                subscriberCount: {
+                    // size count the number of models here created
+                    $size: "$subscribers"
+                },
+                channelsSubscribedToCount: {
+                    $size: "$subscribedTo"
+                },
+                isSubsribed: {
+                    $cond: {
+                        if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+        {
+            // projects the fields we need
+            $project: {
+                fullName: 1,
+                username: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1,
+                subscriberCount: 1,
+                channelsSubscribedToCount: 1,
+                isSubsribed: 1
 
-   return res
-   .status(200)
-   .json(
-    new ApiResponse(200,user,"coverImage updated successsfully")
-   )
+
+            }
+        }
+    ])
+
+    // channel or aggregate return an array from their we need the first object
+    if (!channel?.length) {
+        throw new ApiError(404, "channel does not exists")
+    }
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, channel[0], "User channel fetched successfully")
+        )
 })
 
 export {

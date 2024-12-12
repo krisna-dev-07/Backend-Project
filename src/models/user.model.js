@@ -47,12 +47,19 @@ const userSchema = new Schema(
         }
     }, { timestamps: true }
 )
+// pre hook is a method run just before your data is save
+
+// callback function must not bearrow fn cuz it don't have access to this
+
 userSchema.pre("save", async function (next) {
-    if(!this.isModified("password")) return next();
+    if (!this.isModified("password")) return next();    
+    
+    //isModified checks any field is modified or not
 
     this.password = await bcrypt.hash(this.password, 10)
     next()
-})
+}
+)
 
 userSchema.methods.isPasswordCorrect = async function
     (password) {
@@ -65,7 +72,7 @@ userSchema.methods.generateaccesstoken = async function () {
         username: this.username,
         fullName: this.fullName
     },
-    process.env.ACCESS_TOKEN_SECRET, {
+        process.env.ACCESS_TOKEN_SECRET, {
         expiresIn: process.env.ACCESS_TOKEN_EXPIRY
     });
     // console.log("Generated Access Token:", token); // Log the token
