@@ -5,6 +5,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import jwt from "jsonwebtoken"
 import { application } from "express"
+import mongoose from "mongoose"
 
 //method for tokens genarartion
 const generateAccessAndRefereshTokens = async (userId) => {
@@ -372,7 +373,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         //  this lookup is for finding usernames subscriber from subscription model 
         {
             $lookup: {
-                from: "subscriptions",
+                from: "subscriptions",  //Subscription is from model name in at last export
                 localField: "_id",
                 foreignField: "channel",
                 as: "subscribers"
@@ -436,6 +437,68 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
             new ApiResponse(200, channel[0], "User channel fetched successfully")
         )
 })
+const getWatchhistory = asyncHandler(async (req, res) => {
+    const user = await User.aggregate([
+        {
+            $match: {
+                // _id:req.user._id     
+                /* this is wrong cuz here mongodb pipeline goes directly to mongodb
+                    but in other case mongoose convert the string that we are getting
+                    from req.user._id to actual mongodb id
+                */
+                _id: new mongoose.Types.ObjectId(req.user._id)
+            }
+        },
+        {
+            // this is for finding the videos
+            $lookup:{
+                from:"videos",
+                localField:"watchHistory",
+                foreignField:"_id",
+                as:"watchHistory",
+                // this is for fnding owner or user
+                pipeline:[
+                    {
+                        $lookup:{
+                            from:"users",
+                            localField:"owner",
+                            foreignField:"_id",
+                            as:"owner",
+                            pipeline:[
+                                {
+                                    $project:{
+                                        fullName:1,
+                                        username:1,
+                                        avatar:1
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        // this is done to get object of array recieved form owner
+                        $addFields:{
+                            owner:{
+                                $first:"$owner"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ])
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(
+            200,
+            user[0].watchHistory,
+            "Watch history fetched successfully"
+        )
+    )
+})
+
+
 
 export {
     registerUser,
