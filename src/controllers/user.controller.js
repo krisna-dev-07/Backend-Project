@@ -65,7 +65,7 @@ const registerUser = asyncHandler(async (req, res) => {
     //   to avoid cannot read undefined error
     let avatarlocalPath
     if (req.files && Array.isArray(req.files.avatar) && req.files.avatar.length > 0) {
-        avatarlocalPath = req.files.coverImage[0].path
+        avatarlocalPath = req.files.avatar[0].path
     }
     console.log("path", avatarlocalPath);
 
@@ -438,6 +438,14 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         )
 })
 const getWatchhistory = asyncHandler(async (req, res) => {
+    if (!req.user?._id) {
+       throw new ApiError(405,"UserId is required")
+    }
+
+    // Ensure user ID is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(req.user._id)) {
+       throw new ApiError(406,"Invalid user ID.")
+    }
     const user = await User.aggregate([
         {
             $match: {
@@ -451,25 +459,25 @@ const getWatchhistory = asyncHandler(async (req, res) => {
         },
         {
             // this is for finding the videos
-            $lookup:{
-                from:"videos",
-                localField:"watchHistory",
-                foreignField:"_id",
-                as:"watchHistory",
+            $lookup: {
+                from: "videos",
+                localField: "watchHistory",
+                foreignField: "_id",
+                as: "watchHistory",
                 // this is for fnding owner or user
-                pipeline:[
+                pipeline: [
                     {
-                        $lookup:{
-                            from:"users",
-                            localField:"owner",
-                            foreignField:"_id",
-                            as:"owner",
-                            pipeline:[
+                        $lookup: {
+                            from: "users",
+                            localField: "owner",
+                            foreignField: "_id",
+                            as: "owner",
+                            pipeline: [
                                 {
-                                    $project:{
-                                        fullName:1,
-                                        username:1,
-                                        avatar:1
+                                    $project: {
+                                        fullName: 1,
+                                        username: 1,
+                                        avatar: 1
                                     }
                                 }
                             ]
@@ -477,9 +485,9 @@ const getWatchhistory = asyncHandler(async (req, res) => {
                     },
                     {
                         // this is done to get object of array recieved form owner
-                        $addFields:{
-                            owner:{
-                                $first:"$owner"
+                        $addFields: {
+                            owner: {
+                                $first: "$owner"
                             }
                         }
                     }
@@ -488,14 +496,14 @@ const getWatchhistory = asyncHandler(async (req, res) => {
         }
     ])
     return res
-    .status(200)
-    .json(
-        new ApiResponse(
-            200,
-            user[0].watchHistory,
-            "Watch history fetched successfully"
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                user[0].watchHistory,
+                "Watch history fetched successfully"
+            )
         )
-    )
 })
 
 
@@ -508,6 +516,7 @@ export {
     changePassword,
     getCurrentUser,
     updateUserCreadentials,
+    getUserChannelProfile,
     updateAvatar,
-    updateCoverImage
+    updateCoverImage,getWatchhistory
 }
