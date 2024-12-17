@@ -1,4 +1,4 @@
-import mongoose, { isValidObjectId } from "mongoose"
+import mongoose, { isValidObjectId, mongo } from "mongoose"
 import { Video } from "../models/video.model.js"
 import { User } from "../models/user.model.js"
 import { ApiError } from "../utils/ApiError.js"
@@ -240,7 +240,7 @@ const getVideoById = asyncHandler(async (req, res) => {
                         }
                     },
 
-                        // lookup for to which channel subscribed by  owner
+                    // lookup for to which channel subscribed by  owner
 
                     {
                         $lookup: {
@@ -347,6 +347,171 @@ const getVideoById = asyncHandler(async (req, res) => {
 
 })
 
-export {getAllVideos,
-    publishVideo
+// updating video details
+
+const UpdateVideo = asyncHandler(async (req, res) => {
+    const { videoId } = req.query
+    const { title, description } = req.body
+
+    if (!mongoose.Types.ObjectId.isValid(videoId)) {
+        throw new ApiError(400, "Invalid video Id ")
+    }
+
+    if (!(title && description)) {
+        throw new ApiError(404, "Title and thumbnail required")
+    }
+
+    const video = await Video.findById(videoId)
+
+    if (!video) {
+        throw new ApiError(405, "video doesn't exist")
+    }
+
+    if (video?.owner.toString() !== req.user?._id.toString()) {
+        throw new ApiError(
+            400,
+            "You can't edit this video as you are not the owner"
+        );
+    }
+
+    const thumnailTodelete = video.thumbnail.public_id
+
+    const thumbnailLocalPath = req.file?.path
+
+    if (!thumbnailLocalPath) {
+        throw new ApiError(406, "Thumnail is required !!")
+    }
+
+    const thumbnail = await uploadOnCloudinary(thumbnailLocalPath)
+
+    if (!thumbnailUploaded) {
+        throw new ApiError(500, "Error while uploading thumbnail on cloudinary")
+    }
+
+    const update = await Video.findByIdAndUpdate(
+        videoId,
+        {
+            $set: {
+                title,
+                description,
+                thumbnail: {
+                    public_id: thumbnail.public_id,
+                    url: thumbnail.url
+                }
+            }
+
+        }
+        , {
+            new: true
+        }
+    );
+
+    if (!updatedVideo) {
+        throw new ApiError(500, "Failed to update video please try again");
+    }
+
+    if (updatedVideo) {
+        await deleteOnCloudinary(thumbnailToDelete);
+    }
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, updatedVideo, "Video updated successfully"));
+
+})
+
+// delete video
+const deleteVideo = asyncHandler(async (req, res) => {
+    const {videoId} = req.query
+
+    if (!mongoose.Types.ObjectId.isValid(videoId)) {
+        throw new ApiError(400, "Invalid video Id ")
+    }
+    const video = await Video.findById(videoId)
+
+    if (!video) {
+        throw new ApiError(405, "video doesn't exist")
+    }
+
+    if (video?.owner.toString() !== req.user?._id.toString()) {
+        throw new ApiError(
+            400,
+            "You can't edit this video as you are not the owner"
+        );
+    }
+
+    const videoDeleted = await Video.findByIdAndDelete(video?._id)
+
+    if (!videoDeleted) {
+        throw new ApiError(400, "Failed to delete the video please try again");
+    }
+
+    await deleteOnCloudinary(video.thumbnail.public_id); // video model has thumbnail public_id stored in it->check videoModel
+    await deleteOnCloudinary(video.videoFile.public_id, "video"); // specify video while deleting video
+
+    // delete video likes
+    await Like.deleteMany({
+        video: videoId
+    })
+
+    // delete video comments
+    await Comment.deleteMany({
+        video: videoId,
+    })
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, {}, "Video deleted successfully"));
+})
+
+const toggleVideoIsPublished = asyncHandler(async(req, res) => {
+    const { videoId } = req.query
+    if(!mongoose.Types.ObjectId.isValid(videoId)) {
+        throw new ApiError(400,"Inavalid video Id")
+    }
+
+    const video=await Video.findById(videoId)
+
+    if (!video) {
+        throw new ApiError(401,"Video not found")
+    }
+
+    if(video?.owner.toString()!==req.user?._id.toString())
+    {
+        throw new ApiError(404,"only owner's have this access")
+    }
+
+    const toggledVideoPublish=await Video.findByIdAndUpdate(
+        videoId,{
+            $set:{
+                isPublished:!video?.isPublished
+            }
+        },
+        {
+            new:true
+        }
+    )
+
+    if (!toggledVideoPublish) {
+        throw new ApiError(500, "Failed to toogle video publish status");
+    }
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                { isPublished: toggledVideoPublish.isPublished },
+                "Video publish toggled successfully"
+            )
+        );
+})
+
+export {
+    getAllVideos,
+    publishVideo,
+    getVideoById,
+    UpdateVideo,
+    deleteVideo,
+    toggleVideoIsPublished
 }
