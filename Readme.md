@@ -94,15 +94,6 @@ Before you begin, ensure you have the following installed:
 
 ---
 
-## 🚀 Installation & Setup
-
-### 1. Clone the Repository
-
-First, clone the repository to your local machine:
-
-```bash
-git clone https://github.com/krisna-dev-07/Backend-Project.git
-cd Backend-Project
 
 ## 🚀 Installation & Setup
 
